@@ -1,134 +1,103 @@
 import streamlit as st
-import requests
+import asyncio
+import nest_asyncio
+nest_asyncio.apply()
 
-# ── Configurazione pagina ────────────────────────────────────────────────────
+from utils.downloader import download_youtube_audio
+from utils.transcriber import transcribe_audio
+from utils.ai_processor import generate_title, process_text
+from utils.wordpress import create_post
+from utils.helpers import get_youtube_thumbnail, save_to_files
+
 st.set_page_config(
-    page_title="Follia on Regolo",
-    page_icon="📰",
-    layout="wide",
+    page_title="YT → WordPress",
+    page_icon="🎬",
+    layout="centered"
 )
 
-st.title("📰 Follia on Regolo")
-st.caption("Sintesi automatica di testi tramite Regolo.ai · FT-CS © Leo Sorge 2025")
+st.title("🎬 YouTube → WordPress Publisher")
+st.markdown("Scarica, trascrive, riassume e pubblica automaticamente su WordPress.")
 
-FIRMA = "*Testo realizzato automaticamente con GenAIs pilotate dal software FT-CS © Leo Sorge 2025 e rieditato dalla redazione*"
-
-MODELLI = [
-    "meta-llama/Llama-3.3-70B-Instruct",
-    "meta-llama/Meta-Llama-3.1-70B-Instruct",
-    "meta-llama/Llama-3.1-8B-Instruct",
-    "mistralai/Mistral-7B-Instruct-v0.2",
-]
-
-# ── Funzioni API ─────────────────────────────────────────────────────────────
-
-def chiama_regolo(token: str, model: str, prompt: str) -> str | None:
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Authorization": f"Bearer {token}",
-    }
-    data = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    try:
-        resp = requests.post(
-            "https://api.regolo.ai/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=60,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
-    except requests.exceptions.HTTPError as e:
-        st.error(f"Errore HTTP {resp.status_code}: {resp.text}")
-    except requests.exceptions.RequestException as e:
-        st.error(f"Errore di rete: {e}")
-    return None
-
-
-def genera_sintesi(token: str, model: str, testo: str) -> str | None:
-    prompt = (
-        "Sintetizza in 400 parole, senza punti elenco e senza conclusioni, "
-        "semplificando il linguaggio ma mantenendo le informazioni, "
-        "in particolare quelle numeriche, del seguente testo:\n\n" + testo
-    )
-    return chiama_regolo(token, model, prompt)
-
-
-def genera_titolo(token: str, model: str, testo: str) -> str | None:
-    prompt = (
-        "Genera un titolo conciso e informativo (max 10 parole), che inizia con il nome "
-        "dell'azienda citata, senza virgolette e con le maiuscole all'europea "
-        "(non tutte le parole con la maiuscola), partendo dal seguente testo:\n\n" + testo
-    )
-    return chiama_regolo(token, model, prompt)
-
-
-def genera_testo_processato(token: str, model: str, testo: str) -> str | None:
-    prompt = (
-        "Leggi attentamente il seguente testo:\n\n"
-        + testo
-        + "\n\nRiscrivilo in modo più chiaro e giornalistico, mantenendo tutti i dati numerici. "
-        "Dividilo in due parti separate da un titoletto intermedio. "
-        "Non aggiungere conclusioni né punti elenco."
-    )
-    return chiama_regolo(token, model, prompt)
-
-
-# ── Sidebar: configurazione ───────────────────────────────────────────────────
+# --- Sidebar: Configurazione ---
 with st.sidebar:
     st.header("⚙️ Configurazione")
-    token = st.text_input("Token Regolo.ai", type="password", placeholder="rai_...")
-    model = st.selectbox("Modello", MODELLI)
-    st.markdown("---")
-    st.markdown("[Ottieni un token Regolo.ai](https://regolo.ai)")
-    st.markdown("**Modalità**")
-    modalita = st.radio("", ["Solo sintesi", "Sintesi + titolo + testo completo"])
+    deepgram_key = st.text_input("Deepgram API Key", type="password", value="")
+    openai_key   = st.text_input("OpenAI API Key",   type="password", value="")
+    wp_url       = st.text_input("WordPress URL",    value="https://www.greenstart.it")
+    wp_user      = st.text_input("WP Username",      value="")
+    wp_password  = st.text_input("WP App Password",  type="password", value="")
+    st.divider()
+    st.caption("Le credenziali non vengono salvate sul server.")
 
-# ── Input testo ───────────────────────────────────────────────────────────────
-st.subheader("📝 Testo da elaborare")
-testo_input = st.text_area("Incolla il testo da sintetizzare", height=250)
+# --- Input URL ---
+youtube_url = st.text_input("🔗 URL del video YouTube", placeholder="https://www.youtube.com/watch?v=...")
 
-col1, col2 = st.columns([1, 5])
-with col1:
-    avvia = st.button("▶ Elabora", type="primary", disabled=not token or not testo_input)
+if st.button("🚀 Avvia Pipeline", use_container_width=True, type="primary"):
+    if not youtube_url:
+        st.error("Inserisci un URL YouTube valido.")
+        st.stop()
 
-# ── Elaborazione ──────────────────────────────────────────────────────────────
-if avvia:
-    if not token:
-        st.warning("Inserisci il token Regolo.ai nella barra laterale.")
-    elif not testo_input.strip():
-        st.warning("Inserisci un testo da elaborare.")
-    else:
-        with st.spinner("Generazione sintesi in corso..."):
-            sintesi = genera_sintesi(token, model, testo_input)
+    missing = [k for k, v in {
+        "Deepgram Key": deepgram_key,
+        "OpenAI Key":   openai_key,
+        "WP URL":       wp_url,
+        "WP Username":  wp_user,
+        "WP Password":  wp_password,
+    }.items() if not v]
+    if missing:
+        st.error(f"Campi mancanti nella sidebar: {', '.join(missing)}")
+        st.stop()
 
-        if sintesi:
-            st.subheader("📄 Sintesi")
-            st.write(sintesi)
-            st.markdown("---")
+    # Step 1 – Download
+    with st.status("📥 Scaricamento audio...", expanded=True) as status:
+        audio_file = download_youtube_audio(youtube_url)
+        if not audio_file:
+            status.update(label="❌ Download fallito", state="error")
+            st.stop()
+        status.update(label="✅ Audio scaricato", state="complete")
 
-            if modalita == "Sintesi + titolo + testo completo":
-                with st.spinner("Generazione titolo..."):
-                    titolo = genera_titolo(token, model, sintesi)
-                with st.spinner("Generazione testo processato..."):
-                    testo_proc = genera_testo_processato(token, model, sintesi)
+    # Step 2 – Trascrizione
+    with st.status("🎙️ Trascrizione in corso...", expanded=True) as status:
+        transcript = transcribe_audio(audio_file, deepgram_key)
+        if not transcript:
+            status.update(label="❌ Trascrizione fallita", state="error")
+            st.stop()
+        status.update(label="✅ Trascrizione completata", state="complete")
 
-                if titolo:
-                    st.subheader("🏷️ Titolo generato")
-                    st.markdown(f"### {titolo.strip()}")
+    st.subheader("📝 Trascrizione")
+    with st.expander("Mostra testo completo"):
+        st.write(transcript)
 
-                if testo_proc:
-                    st.subheader("📰 Testo completo")
-                    st.write(testo_proc)
-                    st.markdown(FIRMA)
+    # Step 3 – Elaborazione AI
+    with st.status("🤖 Generazione sintesi...", expanded=True) as status:
+        points = process_text(transcript, openai_key)
+        title  = generate_title(transcript[:500], openai_key)
+        if not points:
+            status.update(label="❌ Elaborazione AI fallita", state="error")
+            st.stop()
+        status.update(label="✅ Sintesi generata", state="complete")
 
-                # Output copia-incolla
-                st.markdown("---")
-                st.subheader("📋 Output finale (copia-incolla)")
-                output_finale = f"**{titolo.strip() if titolo else ''}**\n\n{testo_proc or sintesi}\n\n{FIRMA}"
-                st.text_area("", value=output_finale, height=300)
-            else:
-                st.markdown(FIRMA)
+    st.subheader(f"📌 Titolo: {title}")
+    for i, p in enumerate(points, 1):
+        st.info(f"**Punto {i}:** {p}")
+
+    # Step 4 – Thumbnail
+    img_data = get_youtube_thumbnail(youtube_url)
+
+    # Step 5 – Salvataggio locale
+    save_to_files(points, title, youtube_url)
+
+    # Step 6 – Pubblicazione WordPress
+    with st.status("📤 Pubblicazione su WordPress...", expanded=True) as status:
+        content = "\n\n".join(points) + f"\n\n<p>Sintesi da <a href='{youtube_url}'>video YouTube</a></p>"
+        post = asyncio.run(
+            create_post(title, content, img_data, "thumb.jpg", wp_url, wp_user, wp_password)
+        )
+        if post and post.get("id"):
+            status.update(label="✅ Post pubblicato!", state="complete")
+            st.success(f"🎉 Post pubblicato con ID **{post['id']}**")
+            if post.get("link"):
+                st.markdown(f"[🔗 Visualizza il post]({post['link']})", unsafe_allow_html=True)
+        else:
+            status.update(label="❌ Pubblicazione fallita", state="error")
+            st.error("Errore durante la pubblicazione. Controlla le credenziali WordPress.")
