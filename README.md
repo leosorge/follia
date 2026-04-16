@@ -1,130 +1,64 @@
-import streamlit as st
-import requests
-from requests.auth import HTTPBasicAuth
+# 🎬 YouTube → WordPress Publisher
 
-st.set_page_config(page_title="Pubblica su WordPress", page_icon="🌐", layout="wide")
+Pipeline automatica che:
+1. **Scarica** l'audio da un video YouTube (yt-dlp)
+2. **Trascrive** l'audio in italiano (Deepgram)
+3. **Riassume** il testo in 3 punti (OpenAI GPT-3.5)
+4. **Pubblica** il post con thumbnail su WordPress (REST API)
 
-st.title("🌐 Pubblica su WordPress")
-st.caption("Carica immagine e pubblica l'articolo generato · FT-CS © Leo Sorge 2025")
+## 📁 Struttura del progetto
 
-FIRMA = "*Testo realizzato automaticamente con GenAIs pilotate dal software FT-CS © Leo Sorge 2025 e rieditato dalla redazione*"
+```
+yt2wp/
+├── app.py                        # Entry point Streamlit
+├── requirements.txt
+├── .gitignore
+├── .streamlit/
+│   └── secrets.toml.example      # Template credenziali
+├── utils/
+│   ├── __init__.py
+│   ├── downloader.py             # Download audio YouTube
+│   ├── transcriber.py            # Trascrizione Deepgram
+│   ├── ai_processor.py           # Titolo + sintesi OpenAI
+│   ├── wordpress.py              # Upload media + post WP
+│   └── helpers.py                # Thumbnail + salvataggio file
+└── output/                       # File generati (gitignored)
+    ├── titolo.txt
+    └── sintesi.txt
+```
 
-# ── Sidebar: credenziali WP ───────────────────────────────────────────────────
-with st.sidebar:
-    st.header("⚙️ WordPress")
-    wp_url = st.text_input("URL sito", placeholder="https://miosito.wordpress.com")
-    wp_user = st.text_input("Username / Email")
-    wp_pass = st.text_input("Application Password", type="password",
-                            help="Genera una Application Password da WordPress → Utenti → Profilo")
-    wp_category = st.text_input("Categoria", value="News")
-    st.markdown("---")
-    st.info("Usa le **Application Password** di WordPress, non la password di accesso.")
+## 🚀 Installazione locale
 
-# ── Funzioni WordPress ────────────────────────────────────────────────────────
+```bash
+git clone https://github.com/tuo-utente/yt2wp.git
+cd yt2wp
+pip install -r requirements.txt
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+# Modifica secrets.toml con le tue credenziali
+streamlit run app.py
+```
 
-def carica_immagine(wp_url: str, auth: HTTPBasicAuth, file) -> int | None:
-    endpoint = f"{wp_url.rstrip('/')}/wp-json/wp/v2/media"
-    headers = {"Content-Disposition": f'attachment; filename="{file.name}"'}
-    try:
-        resp = requests.post(
-            endpoint,
-            auth=auth,
-            headers=headers,
-            data=file.read(),
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json().get("id")
-    except requests.exceptions.HTTPError:
-        st.error(f"Errore upload immagine: {resp.status_code} — {resp.text}")
-    except requests.exceptions.RequestException as e:
-        st.error(f"Errore di rete: {e}")
-    return None
+## ☁️ Deploy su Streamlit Cloud
 
+1. Fai il fork del repository su GitHub
+2. Vai su [share.streamlit.io](https://share.streamlit.io) e connetti il repo
+3. Nella sezione **Secrets**, aggiungi le variabili dal file `secrets.toml.example`
+4. Clicca **Deploy**
 
-def crea_post(
-    wp_url: str,
-    auth: HTTPBasicAuth,
-    titolo: str,
-    contenuto: str,
-    image_id: int | None,
-    categoria: str,
-) -> int | None:
-    endpoint = f"{wp_url.rstrip('/')}/wp-json/wp/v2/posts"
-    data: dict = {
-        "title": titolo,
-        "content": contenuto,
-        "status": "publish",
-    }
-    if image_id:
-        data["featured_media"] = image_id
-    # Nota: le categorie richiedono l'ID numerico. Se si vuole usare il nome
-    # bisogna prima fare una GET su /wp-json/wp/v2/categories?search=<nome>
-    try:
-        resp = requests.post(endpoint, auth=auth, json=data, timeout=30)
-        resp.raise_for_status()
-        return resp.json().get("id")
-    except requests.exceptions.HTTPError:
-        st.error(f"Errore creazione post: {resp.status_code} — {resp.text}")
-    except requests.exceptions.RequestException as e:
-        st.error(f"Errore di rete: {e}")
-    return None
+## 🔑 Credenziali necessarie
 
+| Variabile | Dove ottenerla |
+|-----------|---------------|
+| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) |
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) |
+| `WP_URL` | URL del tuo sito WordPress |
+| `WP_USERNAME` | Username amministratore WP |
+| `WP_PASSWORD` | **App Password** (non la password normale) |
 
-# ── Form articolo ─────────────────────────────────────────────────────────────
-st.subheader("✍️ Componi l'articolo")
+> 💡 Per generare un'App Password WordPress: *Utenti → Profilo → Password applicazione*
 
-col1, col2 = st.columns(2)
-with col1:
-    titolo = st.text_input("Titolo")
-with col2:
-    titoletto = st.text_input("Titoletto (sottotitolo intermedio)")
+## ⚠️ Note di sicurezza
 
-parte1 = st.text_area("Parte 1", height=150)
-parte2 = st.text_area("Parte 2", height=150)
-immagine = st.file_uploader("Immagine in evidenza", type=["jpg", "jpeg", "png", "webp"])
-
-# Anteprima
-if titolo or parte1 or parte2:
-    with st.expander("👁 Anteprima articolo", expanded=False):
-        if titolo:
-            st.markdown(f"# {titolo}")
-        if parte1:
-            st.write(parte1)
-        if titoletto:
-            st.markdown(f"### {titoletto}")
-        if parte2:
-            st.write(parte2)
-        st.markdown(FIRMA)
-
-st.markdown("---")
-pubblica = st.button(
-    "🚀 Pubblica su WordPress",
-    type="primary",
-    disabled=not (wp_url and wp_user and wp_pass and titolo and (parte1 or parte2)),
-)
-
-# ── Pubblicazione ─────────────────────────────────────────────────────────────
-if pubblica:
-    auth = HTTPBasicAuth(wp_user, wp_pass)
-    image_id = None
-
-    if immagine:
-        with st.spinner("Caricamento immagine..."):
-            image_id = carica_immagine(wp_url, auth, immagine)
-        if image_id:
-            st.success(f"Immagine caricata (ID: {image_id})")
-
-    contenuto_html = (
-        f"<p>{parte1}</p>\n"
-        f"<h3>{titoletto}</h3>\n"
-        f"<p>{parte2}</p>\n"
-        f"<p><em>{FIRMA.strip('*')}</em></p>"
-    )
-
-    with st.spinner("Pubblicazione articolo..."):
-        post_id = crea_post(wp_url, auth, titolo, contenuto_html, image_id, wp_category)
-
-    if post_id:
-        st.success(f"✅ Articolo pubblicato con ID: {post_id}")
-        st.markdown(f"[Vai al post]({wp_url.rstrip('/')}/?p={post_id})")
+- Non committare mai `secrets.toml` su Git (già nel `.gitignore`)
+- Le credenziali inserite nella sidebar **non vengono salvate** sul server
+- Usa sempre le **App Password** di WordPress, non la password principale
