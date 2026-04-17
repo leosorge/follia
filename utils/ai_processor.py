@@ -1,27 +1,50 @@
-import requests
+"""OpenAI helpers: generate title and three bullet-point summary."""
+from openai import OpenAI
+
+MODEL = "gpt-3.5-turbo"
 
 
-def transcribe_audio(audio_file: str, api_key: str) -> str | None:
-    """Trascrive un file audio usando le API Deepgram."""
+def _client(api_key: str) -> OpenAI:
+    return OpenAI(api_key=api_key)
+
+
+def generate_title(text: str, api_key: str) -> str:
+    """Generate a short, catchy Italian title for the given text."""
     try:
-        with open(audio_file, "rb") as f:
-            audio_data = f.read()
-
-        headers = {
-            "Authorization": f"Token {api_key}",
-            "Content-Type": "audio/mpeg",
-        }
-        url = "https://api.deepgram.com/v1/listen?punctuate=true&language=it"
-        response = requests.post(url, headers=headers, data=audio_data, timeout=120)
-
-        if response.status_code == 200:
-            return (
-                response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
-            )
-
-        print(f"Deepgram error {response.status_code}: {response.text}")
-        return None
-
+        resp = _client(api_key).chat.completions.create(
+            model=MODEL,
+            temperature=0.7,
+            messages=[
+                {"role": "system", "content": "Sei un copywriter italiano. Rispondi solo con il titolo, senza virgolette."},
+                {"role": "user", "content": f"Scrivi un titolo breve (max 10 parole) per questo testo:\n\n{text}"},
+            ],
+        )
+        return resp.choices[0].message.content.strip()
     except Exception as e:
-        print(f"Errore trascrizione: {e}")
-        return None
+        print(f"Errore generate_title: {e}")
+        return "Senza titolo"
+
+
+def process_text(text: str, api_key: str) -> list[str]:
+    """Return up to 3 bullet-point summary strings in Italian."""
+    try:
+        resp = _client(api_key).chat.completions.create(
+            model=MODEL,
+            temperature=0.5,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Sei un assistente che riassume testi in italiano in esattamente "
+                        "3 punti chiave, uno per riga, senza numerazione n\u00e9 elenchi puntati."
+                    ),
+                },
+                {"role": "user", "content": f"Riassumi in 3 punti questo testo:\n\n{text}"},
+            ],
+        )
+        content = resp.choices[0].message.content.strip()
+        points = [p.strip(" -*\t") for p in content.splitlines() if p.strip()]
+        return points[:3]
+    except Exception as e:
+        print(f"Errore process_text: {e}")
+        return []
