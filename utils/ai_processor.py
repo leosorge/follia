@@ -1,11 +1,16 @@
-"""OpenAI helpers: generate title and three bullet-point summary."""
+"""Regolo.ai helpers: generate title and three bullet-point summary.
+
+Regolo è compatibile con le API OpenAI: usiamo il client OpenAI
+puntando a base_url=https://api.regolo.ai/v1.
+"""
 from openai import OpenAI
 
-MODEL = "gpt-3.5-turbo"
+BASE_URL = "https://api.regolo.ai/v1"
+MODEL = "Llama-3.3-70B-Instruct"
 
 
 def _client(api_key: str) -> OpenAI:
-    return OpenAI(api_key=api_key)
+    return OpenAI(api_key=api_key, base_url=BASE_URL)
 
 
 def generate_title(text: str, api_key: str) -> str:
@@ -36,7 +41,7 @@ def process_text(text: str, api_key: str) -> list[str]:
                     "role": "system",
                     "content": (
                         "Sei un assistente che riassume testi in italiano in esattamente "
-                        "3 punti chiave, uno per riga, senza numerazione n\u00e9 elenchi puntati."
+                        "3 punti chiave, uno per riga, senza numerazione né elenchi puntati."
                     ),
                 },
                 {"role": "user", "content": f"Riassumi in 3 punti questo testo:\n\n{text}"},
