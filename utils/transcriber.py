@@ -1,18 +1,18 @@
+"""Audio transcription via Deepgram REST API."""
 import requests
 
 
 def transcribe_audio(audio_file: str, api_key: str) -> str | None:
-    """Trascrive un file audio usando le API Deepgram."""
+    """Transcribe an audio file with Deepgram (Italian)."""
     try:
         with open(audio_file, "rb") as f:
-            audio_data = f.read()
-
-        headers = {
-            "Authorization": f"Token {api_key}",
-            "Content-Type": "audio/mpeg",
-        }
-        url = "https://api.deepgram.com/v1/listen?punctuate=true&language=it"
-        response = requests.post(url, headers=headers, data=audio_data, timeout=120)
+            headers = {
+                "Authorization": f"Token {api_key}",
+                "Content-Type": "audio/mpeg",
+            }
+            url = "https://api.deepgram.com/v1/listen?punctuate=true&language=it"
+            # Stream the file instead of loading it fully in memory
+            response = requests.post(url, headers=headers, data=f, timeout=300)
 
         if response.status_code == 200:
             return (
