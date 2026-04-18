@@ -3,18 +3,27 @@
 YouTube blocca spesso i download con HTTP 403 o "Sign in to confirm you're
 not a bot". Le contromisure in ordine di efficacia:
 
-1. Cookies dal browser (migliore su locale): impostare la variabile
-   d'ambiente YTDLP_BROWSER al nome del browser installato
-   (chrome, firefox, edge, brave, chromium, safari, opera, vivaldi).
-   yt-dlp leggera' i cookies YouTube dal profilo attivo del browser.
+1. Cookies come contenuto in secret (ideale per Streamlit Cloud): incollare
+   il contenuto completo di un cookies.txt (formato Netscape) nel secret
+   YTDLP_COOKIES_CONTENT. A runtime lo scriviamo in un file temporaneo e
+   lo passiamo a yt-dlp.
 
-2. Cookies da file (migliore su server/Streamlit Cloud): esportare un
-   cookies.txt in formato Netscape (es. con l'estensione
-   "Get cookies.txt LOCALLY") e puntare la variabile
-   YTDLP_COOKIES_FILE al percorso del file.
+2. Cookies da file locale: impostare YTDLP_COOKIES_FILE al path di un
+   cookies.txt esistente.
 
-3. Fallback: senza cookies proviamo con client mweb e ios, ma molti
+3. Cookies dal browser (solo uso locale, non su server senza browser):
+   impostare YTDLP_BROWSER (chrome, firefox, edge, brave, chromium,
+   safari, opera, vivaldi). yt-dlp legge direttamente i cookies dal
+   profilo attivo del browser.
+
+4. Fallback: senza cookies proviamo con client mweb e ios, ma molti
    video privati/age-gated falliranno.
+
+Come esportare cookies.txt (una volta, dal tuo PC):
+- Installa l'estensione Chrome/Firefox "Get cookies.txt LOCALLY"
+- Vai su https://www.youtube.com (loggato)
+- Clicca l'estensione -> Export -> salva cookies.txt
+- Copia TUTTO il contenuto del file nel secret YTDLP_COOKIES_CONTENT
 """
 import os
 import tempfile
@@ -30,16 +39,33 @@ UA_MWEB = (
 
 
 def _cookies_opts() -> dict:
-    """Build cookies-related options from environment."""
+    """Build cookies-related options from environment variables."""
     opts: dict = {}
-    browser = os.environ.get("YTDLP_BROWSER", "").strip().lower()
-    if browser:
-        # Tuple form accepted by yt-dlp: (browser[, profile[, keyring[, container]]])
-        opts["cookiesfrombrowser"] = (browser,)
-        return opts
+
+    # 1. Cookies content as secret (Streamlit Cloud friendly)
+    content = os.environ.get("YTDLP_COOKIES_CONTENT")
+    if content and content.strip():
+        # Write to a stable temp file (reuse across calls in the same process)
+        tmp_path = os.path.join(tempfile.gettempdir(), "yt2wp_cookies.txt")
+        try:
+            with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(content)
+            opts["cookiefile"] = tmp_path
+            return opts
+        except Exception as e:
+            print(f"Impossibile scrivere cookies temporanei: {e}")
+
+    # 2. Cookies file path
     cookies_file = os.environ.get("YTDLP_COOKIES_FILE")
     if cookies_file and os.path.isfile(cookies_file):
         opts["cookiefile"] = cookies_file
+        return opts
+
+    # 3. Cookies from installed browser (local dev only)
+    browser = os.environ.get("YTDLP_BROWSER", "").strip().lower()
+    if browser:
+        opts["cookiesfrombrowser"] = (browser,)
+
     return opts
 
 
