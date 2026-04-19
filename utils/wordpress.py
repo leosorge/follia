@@ -12,7 +12,7 @@ async def _upload_image(
 ) -> int | None:
     data = aiohttp.FormData()
     data.add_field("file", io.BytesIO(image_content), filename=filename)
-    async with session.post(f"{wp_url}/wp-json/wp/v2/media", data=data) as resp:
+    async with session.post(f"{wp_url}/?rest_route=/wp/v2/media", data=data) as resp:
         if resp.status == 201:
             return (await resp.json()).get("id")
         print(f"Upload immagine fallito: {resp.status} - {await resp.text()}")
@@ -42,7 +42,7 @@ async def create_post(
             payload["featured_media"] = media_id
 
         async with session.post(
-            f"{wp_url}/wp-json/wp/v2/posts", json=payload
+            f"{wp_url}/?rest_route=/wp/v2/posts", json=payload
         ) as resp:
             if resp.status == 201:
                 return await resp.json()
