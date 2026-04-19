@@ -135,6 +135,11 @@ def download_youtube_audio(youtube_url: str) -> str | None:
             "User-Agent": UA_MWEB,
             "Accept-Language": "en-US,en;q=0.9",
         },
+        # Node.js come runtime JS esterno per risolvere la n-challenge di
+        # YouTube. yt-dlp accetta deno/node/bun/quickjs. Su Streamlit Cloud
+        # installiamo nodejs via packages.txt. Combinato con yt-dlp-ejs
+        # (in requirements.txt) permette di decifrare le signature.
+        "js_runtimes": {"node": {}},
         "extractor_args": {
             "youtube": {
                 # Ordine basato su yt-dlp INNERTUBE_CLIENTS (2026).
