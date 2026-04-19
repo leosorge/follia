@@ -26,9 +26,54 @@ Come esportare cookies.txt (una volta, dal tuo PC):
 - Copia TUTTO il contenuto del file nel secret YTDLP_COOKIES_CONTENT
 """
 import os
+import re
 import tempfile
+import textwrap
 
 import yt_dlp
+
+
+def _normalize_cookies_content(raw: str) -> str:
+    """Normalize a cookies.txt pasted in Streamlit secrets.
+
+    Streamlit TOML triple-quoted strings often keep leading whitespace on
+    each line. yt-dlp expects strict Netscape format:
+    - first non-blank line must start with "# Netscape HTTP Cookie File"
+    - fields must be separated by TAB (not spaces).
+    """
+    # Drop BOM and normalize line endings.
+    text = raw.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    # Remove any common leading indentation from the whole block.
+    text = textwrap.dedent(text)
+    lines_out = []
+    for line in text.split("\n"):
+        # Strip only leading/trailing whitespace from comment/blank lines.
+        # Data lines must keep their internal TABs intact.
+        stripped = line.strip()
+        if not stripped:
+            lines_out.append("")
+            continue
+        if stripped.startswith("#"):
+            lines_out.append(stripped)
+            continue
+        # Data line: if separators are spaces, convert runs of whitespace
+        # to single TABs (Netscape uses TAB as delimiter).
+        if "\t" not in line:
+            parts = re.split(r"\s+", stripped)
+            if len(parts) >= 7:
+                lines_out.append("\t".join(parts[:6]) + "\t" + " ".join(parts[6:]))
+            else:
+                lines_out.append(stripped)
+        else:
+            lines_out.append(line.lstrip())
+    # Ensure header is present as very first line.
+    header = "# Netscape HTTP Cookie File"
+    cleaned = "\n".join(lines_out).lstrip("\n")
+    if not cleaned.startswith(header):
+        cleaned = header + "\n" + cleaned
+    if not cleaned.endswith("\n"):
+        cleaned += "\n"
+    return cleaned
 
 
 UA_MWEB = (
@@ -45,11 +90,12 @@ def _cookies_opts() -> dict:
     # 1. Cookies content as secret (Streamlit Cloud friendly)
     content = os.environ.get("YTDLP_COOKIES_CONTENT")
     if content and content.strip():
-        # Write to a stable temp file (reuse across calls in the same process)
+        # Normalize: dedent, fix line endings, ensure Netscape header + TABs.
+        normalized = _normalize_cookies_content(content)
         tmp_path = os.path.join(tempfile.gettempdir(), "yt2wp_cookies.txt")
         try:
             with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
-                f.write(content)
+                f.write(normalized)
             opts["cookiefile"] = tmp_path
             return opts
         except Exception as e:
@@ -72,7 +118,7 @@ def _cookies_opts() -> dict:
 def download_youtube_audio(youtube_url: str) -> str | None:
     """Download the best audio track for a YouTube URL.
 
-    Returns the local path to the downloaded .mp3 file or None on error.
+    Returns the local path to the downloaded .mp3 file o None on error.
     """
     tmp_dir = tempfile.mkdtemp(prefix="yt2wp_")
     out_template = os.path.join(tmp_dir, "%(id)s.%(ext)s")
