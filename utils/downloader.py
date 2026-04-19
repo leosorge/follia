@@ -137,13 +137,17 @@ def download_youtube_audio(youtube_url: str) -> str | None:
         },
         "extractor_args": {
             "youtube": {
-                # tv: client TV, non richiede PO Token, supporta cookies,
-                #   evita la n-challenge JS. Primo tentativo.
-                # web: fallback, supporta cookies, richiede PO Token per
-                #   alcuni formati ma con cookies spesso basta la SID.
-                # mweb: ulteriore fallback.
-                # ios e' escluso perche' non supporta cookies.
-                "player_client": ["tv", "web", "mweb"],
+                # Ordine basato su yt-dlp INNERTUBE_CLIENTS (2026).
+                # Privilegia i client che NON richiedono GVS PO Token:
+                # - tv: GVS PO Token NON richiesto, supporta cookies,
+                #   no auth. Primo tentativo.
+                # - tv_downgraded: GVS PO Token NON richiesto, supporta
+                #   cookies (richiede auth, quindi servono cookies).
+                # - web_embedded: GVS PO Token NON richiesto, supporta
+                #   cookies. Fallback sicuro.
+                # - web_safari / mweb: richiedono GVS PO Token per
+                #   https, ma non per HLS; ultimo fallback.
+                "player_client": ["tv", "tv_downgraded", "web_embedded", "web_safari", "mweb"],
             }
         },
         "postprocessors": [
