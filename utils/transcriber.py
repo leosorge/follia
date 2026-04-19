@@ -3,25 +3,28 @@ import requests
 
 
 def transcribe_audio(audio_file: str, api_key: str) -> str | None:
-    """Transcribe an audio file with Deepgram (Italian)."""
+    """Transcribe an audio file with Deepgram (Italian).
+
+    Raises RuntimeError on HTTP errors or unexpected responses so the
+    caller can surface a descriptive message instead of a silent None.
+    """
+    with open(audio_file, "rb") as f:
+        headers = {
+            "Authorization": f"Token {api_key}",
+            "Content-Type": "audio/mpeg",
+        }
+        url = "https://api.deepgram.com/v1/listen?punctuate=true&language=it"
+        response = requests.post(url, headers=headers, data=f, timeout=300)
+
+    if response.status_code != 200:
+        body = response.text[:500]
+        raise RuntimeError(f"Deepgram {response.status_code}: {body}")
+
     try:
-        with open(audio_file, "rb") as f:
-            headers = {
-                "Authorization": f"Token {api_key}",
-                "Content-Type": "audio/mpeg",
-            }
-            url = "https://api.deepgram.com/v1/listen?punctuate=true&language=it"
-            # Stream the file instead of loading it fully in memory
-            response = requests.post(url, headers=headers, data=f, timeout=300)
+        transcript = (
+            response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+        )
+    except (KeyError, IndexError, ValueError) as e:
+        raise RuntimeError(f"Risposta Deepgram inattesa: {response.text[:500]}") from e
 
-        if response.status_code == 200:
-            return (
-                response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
-            )
-
-        print(f"Deepgram error {response.status_code}: {response.text}")
-        return None
-
-    except Exception as e:
-        print(f"Errore trascrizione: {e}")
-        return None
+    return transcript
