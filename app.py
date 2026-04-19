@@ -13,6 +13,15 @@ from utils.wordpress import create_post
 
 nest_asyncio.apply()
 
+# Bridge Streamlit secrets -> env vars per yt-dlp (cookies YouTube).
+for _key in ("YTDLP_COOKIES_CONTENT", "YTDLP_COOKIES_FILE", "YTDLP_BROWSER"):
+    try:
+        _val = st.secrets.get(_key)  # type: ignore[attr-defined]
+    except Exception:
+        _val = None
+    if _val and not os.environ.get(_key):
+        os.environ[_key] = str(_val)
+
 st.set_page_config(page_title="YT \u2192 WordPress", page_icon="\U0001F3AC", layout="centered")
 st.title("\U0001F3AC YouTube \u2192 WordPress Publisher")
 st.markdown("Scarica, trascrive, riassume e pubblica automaticamente su WordPress.")
