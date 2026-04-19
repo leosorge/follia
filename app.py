@@ -72,6 +72,11 @@ if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primar
             thumb_bytes = get_youtube_thumbnail(youtube_url)
 
             st.write("\U0001F4DD Trascrivo l'audio (Deepgram)...")
+            audio_size = os.path.getsize(audio_path)
+            st.caption(f"File audio: {os.path.basename(audio_path)} — {audio_size/1024:.0f} KB")
+            if audio_size < 1024:
+                st.error(f"File audio troppo piccolo ({audio_size} bytes). Download probabilmente fallito.")
+                st.stop()
             transcript = transcribe_audio(audio_path, deepgram_key)
             if not transcript:
                 st.error("Trascrizione vuota. Interrompo.")
