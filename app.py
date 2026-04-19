@@ -1,4 +1,5 @@
 """YouTube -> WordPress publishing pipeline (Streamlit entry point)."""
+import asyncio
 import os
 
 import streamlit as st
@@ -34,6 +35,16 @@ with st.sidebar:
 
 youtube_url = st.text_input("\U0001F517 URL del video YouTube", placeholder="https://www.youtube.com/watch?v=...")
 
+
+def _bullets_to_html(points: list[str], source_url: str) -> str:
+    """Render bullet list as HTML ready for WordPress post body."""
+    items = "".join(f"<li>{p}</li>" for p in points if p.strip())
+    return (
+        f"<ul>{items}</ul>"
+        f"<p>Sintesi dal <a href='{source_url}' target='_blank' rel='noopener'>video</a>.</p>"
+    )
+
+
 if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primary"):
     if not youtube_url:
         st.error("Inserisci un URL YouTube valido.")
@@ -58,7 +69,7 @@ if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primar
                 st.stop()
 
             st.write("\U0001F5BC\uFE0F Ottengo la miniatura...")
-            thumb_url = get_youtube_thumbnail(youtube_url)
+            thumb_bytes = get_youtube_thumbnail(youtube_url)
 
             st.write("\U0001F4DD Trascrivo l'audio (Deepgram)...")
             transcript = transcribe_audio(audio_path, deepgram_key)
@@ -68,23 +79,35 @@ if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primar
 
             st.write("\U0001F9E0 Riassumo il testo (Regolo)...")
             points = process_text(transcript, regolo_key)
+            if not points:
+                st.error("Il modello non ha prodotto una sintesi.")
+                st.stop()
 
             st.write("\u270D\uFE0F Genero il titolo...")
             title = generate_title(transcript[:1500], regolo_key)
+            if not title:
+                title = "Articolo da video YouTube"
 
             st.write("\U0001F4BE Salvo file locali...")
-            save_to_files(title, transcript, points, thumb_url)
+            save_to_files(points, title, youtube_url)
 
             st.write("\U0001F4E4 Pubblico su WordPress...")
-            post_url = create_post(
-                wp_url=wp_url,
-                wp_user=wp_user,
-                wp_password=wp_password,
-                title=title,
-                content_bullets=points,
-                transcript=transcript,
-                thumbnail_url=thumb_url,
+            content_html = _bullets_to_html(points, youtube_url)
+            post = asyncio.run(
+                create_post(
+                    title=title,
+                    content=content_html,
+                    image_content=thumb_bytes,
+                    image_filename="thumbnail.jpg",
+                    wp_url=wp_url,
+                    username=wp_user,
+                    password=wp_password,
+                )
             )
+            if not post:
+                st.error("Pubblicazione WordPress fallita. Controlla i log.")
+                st.stop()
+            post_url = post.get("link") or post.get("guid", {}).get("rendered", "")
 
             status.update(label="\u2705 Pipeline completata!", state="complete")
             st.success(f"Articolo pubblicato: {post_url}")
