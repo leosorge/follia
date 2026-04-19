@@ -1,8 +1,6 @@
 """YouTube -> WordPress publishing pipeline (Streamlit entry point)."""
-import asyncio
 import os
 
-import nest_asyncio
 import streamlit as st
 
 from utils.ai_processor import generate_title, process_text
@@ -10,8 +8,6 @@ from utils.downloader import download_youtube_audio
 from utils.helpers import get_youtube_thumbnail, save_to_files
 from utils.transcriber import transcribe_audio
 from utils.wordpress import create_post
-
-nest_asyncio.apply()
 
 # Bridge Streamlit secrets -> env vars per yt-dlp (cookies YouTube).
 for _key in ("YTDLP_COOKIES_CONTENT", "YTDLP_COOKIES_FILE", "YTDLP_BROWSER"):
@@ -57,12 +53,15 @@ if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primar
         try:
             st.write("\U0001F4E5 Scarico audio da YouTube...")
             audio_path = download_youtube_audio(youtube_url)
+            if not audio_path or not os.path.exists(audio_path):
+                st.error("Download fallito: file audio non disponibile.")
+                st.stop()
 
             st.write("\U0001F5BC\uFE0F Ottengo la miniatura...")
             thumb_url = get_youtube_thumbnail(youtube_url)
 
             st.write("\U0001F4DD Trascrivo l'audio (Deepgram)...")
-            transcript = asyncio.run(transcribe_audio(audio_path, deepgram_key))
+            transcript = transcribe_audio(audio_path, deepgram_key)
             if not transcript:
                 st.error("Trascrizione vuota. Interrompo.")
                 st.stop()
