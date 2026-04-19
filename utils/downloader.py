@@ -118,7 +118,7 @@ def _cookies_opts() -> dict:
 def download_youtube_audio(youtube_url: str) -> str | None:
     """Download the best audio track for a YouTube URL.
 
-    Returns the local path to the downloaded .mp3 file o None on error.
+    Returns the local path to the downloaded .mp3 file or None on error.
     """
     tmp_dir = tempfile.mkdtemp(prefix="yt2wp_")
     out_template = os.path.join(tmp_dir, "%(id)s.%(ext)s")
@@ -137,10 +137,13 @@ def download_youtube_audio(youtube_url: str) -> str | None:
         },
         "extractor_args": {
             "youtube": {
-                # mweb + ios sono i client piu' robusti senza PO token
-                # quando si hanno cookies; senza cookies spesso serve
-                # comunque il token.
-                "player_client": ["mweb", "ios"],
+                # tv: client TV, non richiede PO Token, supporta cookies,
+                #   evita la n-challenge JS. Primo tentativo.
+                # web: fallback, supporta cookies, richiede PO Token per
+                #   alcuni formati ma con cookies spesso basta la SID.
+                # mweb: ulteriore fallback.
+                # ios e' escluso perche' non supporta cookies.
+                "player_client": ["tv", "web", "mweb"],
             }
         },
         "postprocessors": [
