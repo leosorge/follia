@@ -80,13 +80,14 @@ if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primar
             st.write("\U0001F9E0 Riassumo il testo (Regolo)...")
             points = process_text(transcript, regolo_key)
             if not points:
-                st.error("Il modello non ha prodotto una sintesi.")
-                st.stop()
+                st.warning("Sintesi non disponibile dal modello: uso contenuto di default.")
+                points = ["paragrafo 1", "paragrafo 2", "paragrafo 3"]
 
             st.write("\u270D\uFE0F Genero il titolo...")
             title = generate_title(transcript[:1500], regolo_key)
             if not title:
-                title = "Articolo da video YouTube"
+                st.warning("Titolo non disponibile dal modello: uso titolo di default.")
+                title = "Titolo 1"
 
             st.write("\U0001F4BE Salvo file locali...")
             save_to_files(points, title, youtube_url)
