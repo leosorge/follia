@@ -26,7 +26,7 @@ st.markdown("Scarica, trascrive, riassume e pubblica automaticamente su WordPres
 
 with st.sidebar:
     st.header("\u2699\uFE0F Configurazione")
-    render_provider_selector(location="main")
+    render_provider_selector()
     deepgram_key = st.text_input("Deepgram API Key", type="password", value="")
     wp_url = st.text_input("WordPress URL", value="", placeholder="https://www.tuosito.it")
     wp_user = st.text_input("WP Username", value="")
@@ -82,7 +82,7 @@ if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primar
                 st.error("Trascrizione vuota. Interrompo.")
                 st.stop()
 
-            st.write("\U0001F9E0 Riassumo il testo (Regolo)...")
+            st.write("\U0001F9E0 Riassumo il testo (LLM)...")
             points = process_text(transcript)
             if not points:
                 st.warning("Sintesi non disponibile dal modello: uso contenuto di default.")
