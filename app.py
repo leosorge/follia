@@ -3,6 +3,7 @@ import asyncio
 import os
 
 import streamlit as st
+from llm_client import render_provider_selector
 
 from utils.ai_processor import generate_title, process_text
 from utils.downloader import download_youtube_audio
@@ -25,8 +26,8 @@ st.markdown("Scarica, trascrive, riassume e pubblica automaticamente su WordPres
 
 with st.sidebar:
     st.header("\u2699\uFE0F Configurazione")
+    render_provider_selector(location="main")
     deepgram_key = st.text_input("Deepgram API Key", type="password", value="")
-    regolo_key = st.text_input("Regolo API Key", type="password", value="")
     wp_url = st.text_input("WordPress URL", value="", placeholder="https://www.tuosito.it")
     wp_user = st.text_input("WP Username", value="")
     wp_password = st.text_input("WP App Password", type="password", value="")
@@ -51,7 +52,6 @@ if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primar
         st.stop()
     missing = [k for k, v in {
         "Deepgram Key": deepgram_key,
-        "Regolo Key": regolo_key,
         "WP URL": wp_url,
         "WP Username": wp_user,
         "WP Password": wp_password,
@@ -83,13 +83,13 @@ if st.button("\U0001F680 Avvia Pipeline", use_container_width=True, type="primar
                 st.stop()
 
             st.write("\U0001F9E0 Riassumo il testo (Regolo)...")
-            points = process_text(transcript, regolo_key)
+            points = process_text(transcript)
             if not points:
                 st.warning("Sintesi non disponibile dal modello: uso contenuto di default.")
                 points = ["paragrafo 1", "paragrafo 2", "paragrafo 3"]
 
             st.write("\u270D\uFE0F Genero il titolo...")
-            title = generate_title(transcript[:1500], regolo_key)
+            title = generate_title(transcript[:1500])
             if not title:
                 st.warning("Titolo non disponibile dal modello: uso titolo di default.")
                 title = "Titolo 1"

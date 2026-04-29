@@ -1,7 +1,7 @@
 streamlit>=1.35.0
 yt-dlp>=2026.03.17
 nest_asyncio>=1.6.0
-openai>=1.30.0
 aiohttp>=3.9.0
 requests>=2.31.0
 yt-dlp-ejs>=0.2.0
+git+https://github.com/leosorge/llm-client.git
